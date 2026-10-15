@@ -1,0 +1,39 @@
+name: Verify index
+
+on:
+  pull_request:
+    paths: [index.json]
+  push:
+    branches: [main]
+    paths: [index.json]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Codico
+        run: |
+          curl -fsSL -o codico.vsix "https://github.com/ehk2509/codico/releases/latest/download/codico.vsix"
+          unzip -q codico.vsix 'extension/*' -d "$RUNNER_TEMP/codico"
+      - name: Verify every package's latest version (download, content hash, manifest, publisher, scan)
+        id: verify
+        run: |
+          set +e
+          node "$RUNNER_TEMP/codico/extension/bin/codico.js" registry verify index.json
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # 1: a package does not verify; 3: a dangerous scan finding (allowed only after a maintainer's review)
+          if [ "$code" = "1" ]; then exit 1; fi
+      - name: Dangerous findings need a maintainer's review
+        if: steps.verify.outputs.code == '3' && !contains(github.event.pull_request.labels.*.name, 'risk-reviewed')
+        run: |
+          echo "The scan found dangerous patterns (above). A maintainer must read the package and label this pull request risk-reviewed."
+          exit 1
