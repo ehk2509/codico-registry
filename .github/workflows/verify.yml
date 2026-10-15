@@ -30,8 +30,9 @@ jobs:
           node "$RUNNER_TEMP/codico/extension/bin/codico.js" registry verify index.json
           code=$?
           echo "code=$code" >> "$GITHUB_OUTPUT"
-          # 1: a package does not verify; 3: a dangerous scan finding (allowed only after a maintainer's review)
-          if [ "$code" = "1" ]; then exit 1; fi
+          # 0: all verified; 3: a dangerous scan finding (allowed only after a maintainer's review); anything else fails,
+          # including a Codico too old to have "registry verify" (it must never pass without checking)
+          if [ "$code" != "0" ] && [ "$code" != "3" ]; then echo "codico registry verify ended with code $code"; exit 1; fi
       - name: Dangerous findings need a maintainer's review
         if: steps.verify.outputs.code == '3' && !contains(github.event.pull_request.labels.*.name, 'risk-reviewed')
         run: |
